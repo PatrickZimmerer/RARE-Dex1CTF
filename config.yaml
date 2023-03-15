@@ -4,3 +4,5 @@ testMode: assertion
 testLimit: 500000
 
 corpusDir: echidna-coverage
+
+sender: ['0x10000']

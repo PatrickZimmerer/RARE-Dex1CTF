@@ -12,6 +12,7 @@ contract DexEchidna {
     event DebugDexToken2(uint256);
     event DebugEchidnaToken1(uint256);
     event DebugEchidnaToken2(uint256);
+    event DebugContractOwner(address);
 
     constructor() {
         dex = new Dex();
@@ -20,16 +21,32 @@ contract DexEchidna {
         token2 = new SwappableToken(address(dex), "TokenTwo", "TWO", 110 ether);
         // dex token addresses get set here
         dex.setTokens(address(token1), address(token2));
-        // dex gets 100 tokens of each token sent from echidna so the starting conditions are met
+        // dex gets 100 tokens of each token so echidna has 10 of each and the starting conditions are met
         token1.transfer(address(dex), 100 ether);
         token2.transfer(address(dex), 100 ether);
+        dex.renounceOwnership();
+        // renounce ownership & approve the dex for handling my tokens
+        dex.approve(address(dex), (2 ** 256 - 1));
     }
 
-    function testStartingConditions() public {
-        emit DebugDexToken1(token1.balanceOf(address(dex)));
-        emit DebugDexToken2(token2.balanceOf(address(dex)));
-        emit DebugEchidnaToken1(token1.balanceOf(address(this)));
-        emit DebugEchidnaToken2(token2.balanceOf(address(this)));
-        assert(token1.balanceOf(address(this)) < 10);
+    function testStartingConditions(
+        address from,
+        address to,
+        uint amount
+    ) public {
+        // optimize fuzzer to only transfer between valid addresses
+        if (from != address(token1) && from != address(token2)) {
+            if (to == address(token1)) {
+                from = address(token2);
+            } else if (to == address(token2)) {
+                from = address(token1);
+            } else {
+                from = address(token1);
+                to = address(token2);
+            }
+        }
+        dex.swap(from, to, amount);
+        assert(token1.balanceOf(address(dex)) > 79);
+        assert(token2.balanceOf(address(dex)) > 79);
     }
 }
