@@ -8,11 +8,8 @@ contract DexEchidna {
     SwappableToken public token2;
     Dex dex;
 
-    event DebugDexToken1(uint256);
-    event DebugDexToken2(uint256);
-    event DebugEchidnaToken1(uint256);
-    event DebugEchidnaToken2(uint256);
-    event DebugContractOwner(address);
+    event BalanceA(uint256);
+    event BalanceB(uint256);
 
     constructor() {
         dex = new Dex();
@@ -29,24 +26,23 @@ contract DexEchidna {
         dex.approve(address(dex), (2 ** 256 - 1));
     }
 
-    function testStartingConditions(
-        address from,
-        address to,
-        uint amount
-    ) public {
-        // optimize fuzzer to only transfer between valid addresses
-        if (from != address(token1) && from != address(token2)) {
-            if (to == address(token1)) {
-                from = address(token2);
-            } else if (to == address(token2)) {
-                from = address(token1);
-            } else {
-                from = address(token1);
-                to = address(token2);
-            }
+    function testSwap(bool aToB, uint256 amount) public {
+        address from;
+        address to;
+        if (aToB) {
+            from = address(token1);
+            to = address(token2);
+        } else {
+            from = address(token2);
+            to = address(token1);
         }
+        amount = 1 ether + (amount % IERC20(from).balanceOf(address(this)));
+
         dex.swap(from, to, amount);
-        assert(token1.balanceOf(address(dex)) > 79);
-        assert(token2.balanceOf(address(dex)) > 79);
+
+        emit BalanceA(token1.balanceOf(address(this)));
+        emit BalanceB(token2.balanceOf(address(this)));
+        assert(token1.balanceOf(address(dex)) > 60 ether);
+        assert(token2.balanceOf(address(dex)) > 60 ether);
     }
 }

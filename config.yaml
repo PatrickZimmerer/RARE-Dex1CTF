@@ -3,6 +3,8 @@ testMode: assertion
 
 testLimit: 500000
 
+seqLen: 500
+
 corpusDir: echidna-coverage
 
 sender: ['0x10000']
